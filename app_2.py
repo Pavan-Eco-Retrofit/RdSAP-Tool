@@ -389,7 +389,7 @@ def process_file(file, selected_recommendations, target_score):
         )
 
 
-    df1 = pd.read_excel(r"data\ECO4 Full Project Scores Matrix.xlsx")
+    df1 = pd.read_excel(r"data/ECO4 Full Project Scores Matrix.xlsx")
     # SAP rating band ranges
     sap_band_ranges = [
         (0, 10.4, "Low_G"),
@@ -477,7 +477,7 @@ def process_file(file, selected_recommendations, target_score):
     df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
     df["COST_SAVINGS_RECOM"] = df.apply(lambda row: f"{assign_sap_band(row['CURRENT_ENERGY_EFFICIENCY'])} -> {assign_sap_band(row['FINISHING_SAP_SCORE'])}", axis=1)
 
-    df2 = pd.read_excel(r"data\coststempo.xlsx")
+    df2 = pd.read_excel(r"data/coststempo.xlsx")
 
     # Mapping dictionary
     recommendation_mapping = {
