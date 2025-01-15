@@ -47,6 +47,7 @@ def process_file(file, selected_recommendations, target_score):
 
     # Standardize BUILT_FORM field
     df['BUILT_FORM'] = df['BUILT_FORM'].str.replace('Enclosed ', '', regex=False)
+    df['MULTI_GLAZE_PROPORTION'] = df['MULTI_GLAZE_PROPORTION'].astype(str)
     df['MULTI_GLAZE_PROPORTION'] = df['MULTI_GLAZE_PROPORTION'].replace(r'\xa0', '', regex=True).str.strip()
 
     # Initialize the RECOMMENDATION column
