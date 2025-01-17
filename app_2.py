@@ -38,12 +38,42 @@ def append_recommendation(current, new):
     return f"{current}, {new}" if current else new
 
 def process_file(file, selected_recommendations, target_score):
-    if file.name.endswith('.csv'):
-        df = pd.read_csv(file, dtype=str)  # Read all columns as strings
-    elif file.name.endswith(('.xlsx', '.xls')):
-        df = pd.read_excel(file, dtype=str)  # Read all columns as strings
-    else:
-        st.error("Unsupported file type. Please upload a CSV or Excel file.")
+    import chardet  # For detecting file encoding
+
+    # Try reading the file without specifying encoding first
+    try:
+        if file.name.endswith('.csv'):
+            df = pd.read_csv(file, dtype=str)  # Read all columns as strings (default encoding)
+        elif file.name.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file, dtype=str)  # Read all columns as strings
+        else:
+            st.error("Unsupported file type. Please upload a CSV or Excel file.")
+            return None
+    except Exception as e:
+        # If reading fails, try to handle encoding errors
+        st.warning("An error occurred while reading the file. Trying to detect encoding...")
+        
+        # Detect encoding using chardet
+        raw_data = file.read()
+        file.seek(0)  # Reset file pointer after reading
+        detected_encoding = chardet.detect(raw_data)["encoding"]
+        
+        # Try reading the file again with the detected encoding
+        try:
+            if file.name.endswith('.csv'):
+                df = pd.read_csv(file, dtype=str, encoding=detected_encoding)  # Use detected encoding
+            elif file.name.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file, dtype=str)  # Excel doesn't need encoding (handled by default)
+            else:
+                st.error("Unsupported file type. Please upload a CSV or Excel file.")
+                return None
+        except Exception as encoding_error:
+            st.error(f"Failed to read the file with detected encoding '{detected_encoding}'. Error: {encoding_error}")
+            return None
+
+    # Ensure the file contains data
+    if df.empty:
+        st.error("The uploaded file is empty.")
         return None
     
     df['CONSTRUCTION_AGE_BAND'] = df['CONSTRUCTION_AGE_BAND'].fillna("").astype(str)
