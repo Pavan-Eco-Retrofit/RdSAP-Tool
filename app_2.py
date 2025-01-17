@@ -29,7 +29,8 @@ recommendations_list = [
     "Roof room insulation",
     "Solid wall insulation (external)",
     "Solid wall insulation (internal)",
-    "External Wall insulation on system build & Timber frame walls"
+    "External Wall insulation on system build & Timber frame walls",
+    "Solar PV"
 ]
 
 # Function to append recommendations
@@ -38,22 +39,22 @@ def append_recommendation(current, new):
 
 def process_file(file, selected_recommendations, target_score):
     if file.name.endswith('.csv'):
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, dtype=str)  # Read all columns as strings
     elif file.name.endswith(('.xlsx', '.xls')):
-        df = pd.read_excel(file)
+        df = pd.read_excel(file, dtype=str)  # Read all columns as strings
     else:
         st.error("Unsupported file type. Please upload a CSV or Excel file.")
         return None
-
+    
+    df['CONSTRUCTION_AGE_BAND'] = df['CONSTRUCTION_AGE_BAND'].fillna("").astype(str)
     # Standardize BUILT_FORM field
     df['BUILT_FORM'] = df['BUILT_FORM'].str.replace('Enclosed ', '', regex=False)
-    df['MULTI_GLAZE_PROPORTION'] = df['MULTI_GLAZE_PROPORTION'].astype(str)
     df['MULTI_GLAZE_PROPORTION'] = df['MULTI_GLAZE_PROPORTION'].replace(r'\xa0', '', regex=True).str.strip()
 
     # Initialize the RECOMMENDATION column
     df['RECOMMENDATION'] = ""
 
-    # Apply selected recommendation logic here
+    # Apply selected recommendation logic hereS
     for recommendation in selected_recommendations:
         if recommendation == "Air or ground source heat pump":
             condition = (
@@ -237,6 +238,15 @@ def process_file(file, selected_recommendations, target_score):
                 ):
                     df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
 
+        if recommendation == "Solar PV":
+            condition = (
+                (df['PHOTO_SUPPLY'] == '0') |  (df['PHOTO_SUPPLY'] == 0)
+            )
+            df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
+                lambda rec: append_recommendation(rec, recommendation)
+            )
+             
+
     # Clean up trailing commas in RECOMMENDATION column
     df['RECOMMENDATION'] = df['RECOMMENDATION'].str.rstrip(', ')
     
@@ -253,10 +263,12 @@ def process_file(file, selected_recommendations, target_score):
         "Solid wall insulation (external)": 5,
         "Solid wall insulation (internal)": 5,
         "External Wall insulation on system build & Timber frame walls": 5,
-        "Air or ground source heat pump": 2
+        "Air or ground source heat pump": 2,
+        "Solar PV": 10
     }
 
     priority_table = {
+        "Solar PV" : 1,
         "Loft insulation at ceiling level": 1,
         "Low energy lights": 1,
         "Draught proofing of windows and doors": 1,
@@ -268,10 +280,12 @@ def process_file(file, selected_recommendations, target_score):
         "Solid wall insulation (external)": 4,
         "Solid wall insulation (internal)": 4,
         "External Wall insulation on system build & Timber frame walls": 4,
-        "Air or ground source heat pump": 5
+        "Air or ground source heat pump": 5,
+
     }
 
     fabric_priority_table = {
+        "Solar PV" : 1,
         "Loft insulation at ceiling level": 1,
         "Low energy lights": 2,
         "Draught proofing of windows and doors": 1,
@@ -287,6 +301,7 @@ def process_file(file, selected_recommendations, target_score):
     }
 
     client_priority = {
+        "Solar PV" : 1,
         "Loft insulation at ceiling level": 1,
         "Low energy lights": 1,
         "Draught proofing of windows and doors": 1,
@@ -390,149 +405,9 @@ def process_file(file, selected_recommendations, target_score):
         )
 
 
-    df1 = pd.read_excel(r"data/ECO4 Full Project Scores Matrix.xlsx")
-    # SAP rating band ranges
-    sap_band_ranges = [
-        (0, 10.4, "Low_G"),
-        (10.5, 20.4, "High_G"),
-        (20.5, 29.4, "Low_F"),
-        (29.5, 38.4, "High_F"),
-        (38.5, 46.4, "Low_E"),
-        (46.5, 54.4, "High_E"),
-        (54.5, 61.4, "Low_D"),
-        (61.5, 68.4, "High_D"),
-        (68.5, 74.4, "Low_C"),
-        (74.5, 80.4, "High_C"),
-        (80.5, 85.9, "Low_B"),
-        (86.0, 91.4, "High_B"),
-        (91.5, 95.9, "Low_A"),
-        (96.0, float('inf'), "High_A")
-    ]
-
-    # Assign SAP band based on ranges
-    def assign_sap_band(value):
-        for lower, upper, band in sap_band_ranges:
-            if lower <= value <= upper:
-                return band
-        return None
-
-    # Dynamically determine Floor Area Segments from df1
-    def parse_floor_area_segments(segment):
-        try:
-            if "+" in segment:  # Handle open-ended ranges like "200+"
-                lower = int(segment.replace("+", "").strip())
-                upper = float('inf')
-            else:
-                lower, upper = map(int, segment.split("-"))
-            return (lower, upper, segment)
-        except ValueError as e:
-            print(f"Error parsing segment: {segment}")
-            return None
-
-    ## Ensure TOTAL_FLOOR_AREA is numeric
-    df['TOTAL_FLOOR_AREA'] = pd.to_numeric(df['TOTAL_FLOOR_AREA'], errors='coerce').fillna(0)
-
-    # Parse Floor Area Segments from df1
-    floor_area_segments = [
-        parse_floor_area_segments(seg)
-        for seg in df1["Floor Area Segment"].unique()
-        if parse_floor_area_segments(seg) is not None
-    ]
-
-    # Function to assign floor area segment
-    def assign_floor_area_segment(value):
-        for lower, upper, segment in floor_area_segments:
-            if lower <= value <= upper:
-                return segment
-        return None
-
-    # Updated get_cost_savings function
-    def get_cost_savings(row):
-        # Step 1: Get SAP bands for CURRENT_ENERGY_EFFICIENCY and FINISHING_SAP_SCORE
-        current_band = assign_sap_band(row["CURRENT_ENERGY_EFFICIENCY"])
-        finishing_band = assign_sap_band(row["FINISHING_SAP_SCORE"])
-        
-        # Debugging outputs
-        #print(f"Row: {row.name}, Current Band: {current_band}, Finishing Band: {finishing_band}")
-
-        # Step 2: Get Floor Area Segment
-        floor_area_segment = assign_floor_area_segment(row["TOTAL_FLOOR_AREA"])
-        #print(f"Row: {row.name}, Floor Area Segment: {floor_area_segment}")
-
-        # Step 3: Match with df1 to find Cost Savings
-        filtered_df1 = df1[
-            (df1["Floor Area Segment"] == floor_area_segment) &
-            (df1["Starting Band"] == current_band) &
-            (df1["Finishing Band"] == finishing_band)
-        ]
-
-        # Debugging outputs
-        #print(f"Row: {row.name}, Filtered df1:\n{filtered_df1}")
-
-        if not filtered_df1.empty:
-            return filtered_df1["Cost Savings"].iloc[0]
-        else:
-            return "Not Found"
-
-    # Apply get_cost_savings
-    df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
-    df["COST_SAVINGS_RECOM"] = df.apply(lambda row: f"{assign_sap_band(row['CURRENT_ENERGY_EFFICIENCY'])} -> {assign_sap_band(row['FINISHING_SAP_SCORE'])}", axis=1)
-
-    df2 = pd.read_excel(r"data/coststempo.xlsx")
-
-    # Mapping dictionary
-    recommendation_mapping = {
-        "Air or ground source heat pump": "ASHP",
-        "Double glazed windows": "DGW",
-        "Draught proofing of windows and doors": "DPW",
-        "Cavity wall insulation on its own": "CWI",
-        "Flat roof insulation": "FRI",
-        "Heating controls for wet central heating": "HC",
-        "Loft insulation at ceiling level": "LI",
-        "Roof room insulation": "RI",
-        "Low energy lights": "LEL",
-        "Solid wall insulation (external)": "SWEI",
-        "Solid wall insulation (internal)": "SWII",
-        "External Wall insulation on system build & Timber frame walls": "EWI"
-    }
-
-    # Step 1: Combine `PROPERTY_TYPE` and `BUILT_FORM` to create `Property Type : Build Form`
-    df["Property Type : Build Form"] = df["PROPERTY_TYPE"] + " : " + df["BUILT_FORM"]
-
-    # Step 2: Define function to calculate recommendation sums
-    def calculate_recommendation_sum(row, recommendation_column, df, mapping, subset=None):
-        recommendations = row[recommendation_column].split(", ") if row[recommendation_column] else []
-        if subset:
-            recommendations = [rec for rec in recommendations if rec in subset]
-
-        
-        columns_to_sum = [mapping[rec] for rec in recommendations if rec in mapping]
-        
-        if not columns_to_sum:  # If no valid recommendations are found
-            return row.get(recommendation_column, 0)  # Return existing column value
-        
-        matching_row = df[df["Property Type : Build Form"] == row["Property Type : Build Form"]]
-        if not matching_row.empty:
-            return matching_row[columns_to_sum].sum(axis=1).values[0]
-        
-        return row.get(recommendation_column, 0)  # Default to existing column value if no match is found
-
-    # Step 3: Compute recommendation sums
-    df["RECOMMENDATION_SUM"] = df.apply(
-        calculate_recommendation_sum, axis=1, args=("RECOMMENDATION", df2, recommendation_mapping)
-    )
-    df["LOWCOST_RECOMMENDATION_SUM"] = df.apply(
-        calculate_recommendation_sum, axis=1, args=("LOWCOST_RECOMMENDATION", df2, recommendation_mapping)
-    )
-    df["FABRIC_RECOMMENDATION_SUM"] = df.apply(
-        calculate_recommendation_sum, axis=1, args=("FABRIC_RECOMMENDATION", df2, recommendation_mapping)
-    )
-
-    df = df[df['RECOMMENDATION'] != ""]
+    #df = df[df['RECOMMENDATION'] != ""]
 
     return df
-
-
 
 
 
@@ -588,56 +463,77 @@ def login():
 def main_app():
     st.title("Recommendation Generator")
 
-    # File upload
     uploaded_file = st.file_uploader("Upload your CSV or Excel file", type=["csv", "xlsx", "xls"])
 
-    # Dropdown for recommendations
-    recommendations_list = [
-        "Air or ground source heat pump",
-        "Double glazed windows",
-        "Draught proofing of windows and doors",
-        "Cavity wall insulation on its own",
-        "Flat roof insulation",
-        "Heating controls for wet central heating",
-        "Loft insulation at ceiling level",
-        "Low energy lights",
-        "Roof room insulation",
-        "Solid wall insulation (external)",
-        "Solid wall insulation (internal)",
-        "External Wall insulation on system build & Timber frame walls"
-    ]
-    selected_recommendations = st.multiselect("Select Recommendations", recommendations_list)
-
-    # Target score slider
-    target_score = st.slider("Set Target Score", min_value=0, max_value=100, value=70, step=1)
-
-    # Display selected recommendations as a cart
-    if selected_recommendations:
-        st.write("### Selected Recommendations:")
-        for rec in selected_recommendations:
-            st.write(f"- {rec}")
-
-    # Placeholder for file processing logic
     if uploaded_file:
-        st.write("Processing file...")
-        # Call your file processing function here
-        processed_df = process_file(uploaded_file, selected_recommendations, target_score)
-        if processed_df is not None:
-            st.write("### Processed Data")
-            st.dataframe(processed_df)
+        # Read the uploaded file and extract column names
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file, dtype=str)
+        elif uploaded_file.name.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file, dtype=str)
 
-            # Download processed data
-            processed_file_name = "processed_recommendations.xlsx"
-            st.write(processed_df.shape[0])
-            processed_df.to_excel(processed_file_name, index=False)
-            st.download_button(
-                label="Download Processed File",
-                data=open(processed_file_name, "rb"),
-                file_name=processed_file_name,
-                mime="application/vnd.ms-excel"
-            )
-        # Placeholder logic
-        st.write("File processed successfully!")
+        column_list = list(df.columns)
+
+        recommendations_list = [
+            "Air or ground source heat pump",
+            "Double glazed windows",
+            "Draught proofing of windows and doors",
+            "Cavity wall insulation on its own",
+            "Flat roof insulation",
+            "Heating controls for wet central heating",
+            "Loft insulation at ceiling level",
+            "Low energy lights",
+            "Roof room insulation",
+            "Solid wall insulation (external)",
+            "Solid wall insulation (internal)",
+            "External Wall insulation on system build & Timber frame walls",
+            "Solar PV"
+        ]
+
+        selected_recommendations = st.multiselect("Select Recommendations", recommendations_list)
+
+        st.write("### Select Analysis Type")
+        lowcost_epc = st.checkbox("Lowcost EPC")
+        fabric_cost_epc = st.checkbox("Fabric cost EPC")
+        full_recommendations = st.checkbox("Full Recommendations")
+        client_target_epc = st.checkbox("Client Target EPC")
+
+        target_score = 70  # Default target score
+
+        additional_columns = []
+
+        if lowcost_epc:
+            additional_columns.extend(["LOWCOST_RECOMMENDATION", "TOTAL_LOWCOST_RECOMMENDATION"])
+
+        if fabric_cost_epc:
+            additional_columns.extend(["FABRIC_RECOMMENDATION", "TOTAL_FABRIC_RECOMMENDATION"])
+
+        if full_recommendations:
+            additional_columns.extend(["RECOMMENDATION", "FINISHING_SAP_SCORE"])
+
+        if client_target_epc:
+            target_score = st.slider("Set Target Score", min_value=0, max_value=100, value=70, step=1)
+            additional_columns.extend(["CLIENTS_RECOMMENDATION", "CLIENT_TARGET_SCORE"])
+        
+         # Extend column_list with additional columns
+        column_list.extend([col for col in additional_columns if col not in column_list])
+
+        if st.button("Generate Recommendations"):
+            processed_df = process_file(uploaded_file, selected_recommendations, target_score)
+            if processed_df is not None:
+                processed_df = processed_df[column_list]
+                st.write("### Processed Data")
+                st.dataframe(processed_df)
+                st.write(processed_df.shape[0])
+                processed_file_name = "processed_recommendations.xlsx"
+                processed_df.to_excel(processed_file_name, index=False)
+
+                st.download_button(
+                    label="Download Processed File",
+                    data=open(processed_file_name, "rb"),
+                    file_name=processed_file_name,
+                    mime="application/vnd.ms-excel"
+                )
 
 
 if "logged_in" not in st.session_state:
