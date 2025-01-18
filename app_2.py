@@ -439,8 +439,93 @@ def process_file(file, selected_recommendations, target_score):
             lambda x: 'same sap score' if x[col] == x['CURRENT_ENERGY_EFFICIENCY'] else x[col], axis=1
         )
 
+    df1 = pd.read_excel(r"data/ECO4 Full Project Scores Matrix.xlsx")
+    # SAP rating band ranges
+    sap_band_ranges = [
+        (0, 10.4, "Low_G"),
+        (10.5, 20.4, "High_G"),
+        (20.5, 29.4, "Low_F"),
+        (29.5, 38.4, "High_F"),
+        (38.5, 46.4, "Low_E"),
+        (46.5, 54.4, "High_E"),
+        (54.5, 61.4, "Low_D"),
+        (61.5, 68.4, "High_D"),
+        (68.5, 74.4, "Low_C"),
+        (74.5, 80.4, "High_C"),
+        (80.5, 85.9, "Low_B"),
+        (86.0, 91.4, "High_B"),
+        (91.5, 95.9, "Low_A"),
+        (96.0, float('inf'), "High_A")
+    ]
 
-    #df = df[df['RECOMMENDATION'] != ""]
+    # Assign SAP band based on ranges
+    def assign_sap_band(value):
+        for lower, upper, band in sap_band_ranges:
+            if lower <= value <= upper:
+                return band
+        return None
+
+    # Dynamically determine Floor Area Segments from df1
+    def parse_floor_area_segments(segment):
+        try:
+            if "+" in segment:  # Handle open-ended ranges like "200+"
+                lower = int(segment.replace("+", "").strip())
+                upper = float('inf')
+            else:
+                lower, upper = map(int, segment.split("-"))
+            return (lower, upper, segment)
+        except ValueError as e:
+            print(f"Error parsing segment: {segment}")
+            return None
+
+    ## Ensure TOTAL_FLOOR_AREA is numeric
+    df['TOTAL_FLOOR_AREA'] = pd.to_numeric(df['TOTAL_FLOOR_AREA'], errors='coerce').fillna(0)
+
+    # Parse Floor Area Segments from df1
+    floor_area_segments = [
+        parse_floor_area_segments(seg)
+        for seg in df1["Floor Area Segment"].unique()
+        if parse_floor_area_segments(seg) is not None
+    ]
+
+    # Function to assign floor area segment
+    def assign_floor_area_segment(value):
+        for lower, upper, segment in floor_area_segments:
+            if lower <= value <= upper:
+                return segment
+        return None
+
+    # Updated get_cost_savings function
+    def get_cost_savings(row):
+        # Step 1: Get SAP bands for CURRENT_ENERGY_EFFICIENCY and FINISHING_SAP_SCORE
+        current_band = assign_sap_band(row["CURRENT_ENERGY_EFFICIENCY"])
+        finishing_band = assign_sap_band(row["FINISHING_SAP_SCORE"])
+        
+        # Debugging outputs
+        #print(f"Row: {row.name}, Current Band: {current_band}, Finishing Band: {finishing_band}")
+
+        # Step 2: Get Floor Area Segment
+        floor_area_segment = assign_floor_area_segment(row["TOTAL_FLOOR_AREA"])
+        #print(f"Row: {row.name}, Floor Area Segment: {floor_area_segment}")
+
+        # Step 3: Match with df1 to find Cost Savings
+        filtered_df1 = df1[
+            (df1["Floor Area Segment"] == floor_area_segment) &
+            (df1["Starting Band"] == current_band) &
+            (df1["Finishing Band"] == finishing_band)
+        ]
+
+        # Debugging outputs
+        #print(f"Row: {row.name}, Filtered df1:\n{filtered_df1}")
+
+        if not filtered_df1.empty:
+            return filtered_df1["Cost Savings"].iloc[0]
+        else:
+            return "Not Found"
+
+    # Apply get_cost_savings
+    df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
+    #df["COST_SAVINGS_RECOM"] = df.apply(lambda row: f"{assign_sap_band(row['CURRENT_ENERGY_EFFICIENCY'])} -> {assign_sap_band(row['FINISHING_SAP_SCORE'])}", axis=1)
 
     return df
 
@@ -531,8 +616,9 @@ def main_app():
         lowcost_epc = st.checkbox("Lowcost EPC")
         fabric_cost_epc = st.checkbox("Fabric cost EPC")
         full_recommendations = st.checkbox("Full Recommendations")
-        client_target_epc = st.checkbox("Client Target EPC")
         include_renewable_energy = st.checkbox("Renewable Energy")
+        cost_savings = st.checkbox("Cost Savings")
+        client_target_epc = st.checkbox("Client Target EPC")
 
         target_score = 70  # Default target score
 
@@ -546,13 +632,16 @@ def main_app():
 
         if full_recommendations:
             additional_columns.extend(["RECOMMENDATION", "FINISHING_SAP_SCORE"])
-            
+
         if include_renewable_energy:
             additional_columns.append("Renewable_energy")
 
         if client_target_epc:
             target_score = st.slider("Set Target Score", min_value=0, max_value=100, value=70, step=1)
             additional_columns.extend(["CLIENTS_RECOMMENDATION", "CLIENT_TARGET_SCORE"])
+
+        if cost_savings:
+            additional_columns.append("COST_SAVINGS")
         
          # Extend column_list with additional columns
         column_list.extend([col for col in additional_columns if col not in column_list])
