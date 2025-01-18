@@ -392,6 +392,11 @@ def process_file(file, selected_recommendations, target_score):
 
     # Target score provided by the client (replace this with the actual target)
     target_score = target_score
+    
+    df['Renewable_energy'] = df['RECOMMENDATION'].apply(
+        lambda rec: ', '.join([r for r in rec.split(', ') if r.strip() in ['Solar PV', 'Air or ground source heat pump']]) 
+        if any(r.strip() in ['Solar PV', 'Air or ground source heat pump'] for r in rec.split(', ')) else 'Not Found'
+    )
 
     df['CURRENT_ENERGY_EFFICIENCY'] = pd.to_numeric(df['CURRENT_ENERGY_EFFICIENCY'], errors='coerce').fillna(0)
     df['FINISHING_SAP_SCORE'] = df['RECOMMENDATION'].apply(
@@ -527,6 +532,7 @@ def main_app():
         fabric_cost_epc = st.checkbox("Fabric cost EPC")
         full_recommendations = st.checkbox("Full Recommendations")
         client_target_epc = st.checkbox("Client Target EPC")
+        include_renewable_energy = st.checkbox("Renewable Energy")
 
         target_score = 70  # Default target score
 
@@ -540,6 +546,9 @@ def main_app():
 
         if full_recommendations:
             additional_columns.extend(["RECOMMENDATION", "FINISHING_SAP_SCORE"])
+            
+        if include_renewable_energy:
+            additional_columns.append("Renewable_energy")
 
         if client_target_epc:
             target_score = st.slider("Set Target Score", min_value=0, max_value=100, value=70, step=1)
