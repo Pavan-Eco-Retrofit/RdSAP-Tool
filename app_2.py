@@ -27,8 +27,7 @@ recommendations_list = [
     "Loft insulation at ceiling level",
     "Low energy lights",
     "Roof room insulation",
-    "Solid wall insulation (external)",
-    "Solid wall insulation (internal)",
+    "Solid wall insulation (internal or external)",
     "External Wall insulation on system build & Timber frame walls",
     "Solar PV"
 ]
@@ -218,7 +217,7 @@ def process_file(file, selected_recommendations, target_score):
                     if age_band in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
                         df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
 
-        if recommendation == "Solid wall insulation (external)":
+        if recommendation == "Solid wall insulation (internal or external)":
             solid_brick_patterns = [
                 "solid brick, as built, no insulation (assumed)",
                 "solid brick, as built, insulated (assumed)",
@@ -234,18 +233,6 @@ def process_file(file, selected_recommendations, target_score):
                     age_band = next((k for k, v in age_band_dict.items() if construction_age_band in v), None)
                     if age_band in ['A', 'B', 'C', 'D', 'E', 'F']:
                         df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
-
-        if recommendation == "Solid wall insulation (internal)":
-            for index, row in df.iterrows():
-                walls_description = str(row['WALLS_DESCRIPTION']).lower()
-                construction_age_band = str(row.get('CONSTRUCTION_AGE_BAND', ''))
-                inside_polygon = str(row.get('INSIDE_POLYGON', '')).lower()
-
-                if (
-                    any(pattern in walls_description for pattern in solid_brick_patterns) and
-                    (next((k for k, v in age_band_dict.items() if construction_age_band in v), None) in ['A', 'B', 'C', 'D', 'E', 'F'])
-                ) or inside_polygon == 'yes':
-                    df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
 
         if recommendation == "External Wall insulation on system build & Timber frame walls":
             timber_frame_patterns = [
@@ -275,12 +262,12 @@ def process_file(file, selected_recommendations, target_score):
             df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
                 lambda rec: append_recommendation(rec, recommendation)
             )
-             
+            
 
     # Clean up trailing commas in RECOMMENDATION column
     df['RECOMMENDATION'] = df['RECOMMENDATION'].str.rstrip(', ')
     
-        # Scores and priority tables
+    # Scores and priority tables
     measure_scores = {
         "Loft insulation at ceiling level": 2,
         "Low energy lights": 1,
@@ -290,8 +277,7 @@ def process_file(file, selected_recommendations, target_score):
         "Double glazed windows": 4,
         "Flat roof insulation": 3,
         "Roof room insulation": 6,
-        "Solid wall insulation (external)": 5,
-        "Solid wall insulation (internal)": 5,
+        "Solid wall insulation (internal or external)": 5,
         "External Wall insulation on system build & Timber frame walls": 5,
         "Air or ground source heat pump": 2,
         "Solar PV": 10
@@ -307,8 +293,7 @@ def process_file(file, selected_recommendations, target_score):
         "Double glazed windows": 3,
         "Flat roof insulation": 4,
         "Roof room insulation": 4,
-        "Solid wall insulation (external)": 4,
-        "Solid wall insulation (internal)": 4,
+        "Solid wall insulation (internal or external)": 4,
         "External Wall insulation on system build & Timber frame walls": 4,
         "Air or ground source heat pump": 5,
 
@@ -324,8 +309,7 @@ def process_file(file, selected_recommendations, target_score):
         "Double glazed windows": 1,
         "Flat roof insulation": 1,
         "Roof room insulation": 1,
-        "Solid wall insulation (external)": 1,
-        "Solid wall insulation (internal)": 1,
+        "Solid wall insulation (internal or external)": 1,
         "External Wall insulation on system build & Timber frame walls": 1,
         "Air or ground source heat pump": 3
     }
@@ -526,7 +510,7 @@ def process_file(file, selected_recommendations, target_score):
     # Apply get_cost_savings
     df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
     #df["COST_SAVINGS_RECOM"] = df.apply(lambda row: f"{assign_sap_band(row['CURRENT_ENERGY_EFFICIENCY'])} -> {assign_sap_band(row['FINISHING_SAP_SCORE'])}", axis=1)
-
+                        
     return df
 
 
@@ -604,8 +588,7 @@ def main_app():
             "Loft insulation at ceiling level",
             "Low energy lights",
             "Roof room insulation",
-            "Solid wall insulation (external)",
-            "Solid wall insulation (internal)",
+            "Solid wall insulation (internal or external)",
             "External Wall insulation on system build & Timber frame walls",
             "Solar PV"
         ]
@@ -647,22 +630,22 @@ def main_app():
         column_list.extend([col for col in additional_columns if col not in column_list])
 
         if st.button("Generate Recommendations"):
-            processed_df = process_file(uploaded_file, selected_recommendations, target_score)
-            if processed_df is not None:
-                processed_df = processed_df[column_list]
-                st.write("### Processed Data")
-                st.dataframe(processed_df)
-                st.write(processed_df.shape[0])
-                processed_file_name = "processed_recommendations.xlsx"
-                processed_df.to_excel(processed_file_name, index=False)
+            with st.spinner("Processing data..."):
+                processed_df = process_file(uploaded_file, selected_recommendations, target_score)
+                if processed_df is not None:
+                    processed_df = processed_df[column_list]
+                    st.write("### Processed Data")
+                    st.dataframe(processed_df)
+                    st.write(processed_df.shape[0])
+                    processed_file_name = "processed_recommendations.xlsx"
+                    processed_df.to_excel(processed_file_name, index=False)
 
-                st.download_button(
-                    label="Download Processed File",
-                    data=open(processed_file_name, "rb"),
-                    file_name=processed_file_name,
-                    mime="application/vnd.ms-excel"
-                )
-
+                    st.download_button(
+                        label="Download Processed File",
+                        data=open(processed_file_name, "rb"),
+                        file_name=processed_file_name,
+                        mime="application/vnd.ms-excel"
+                    )
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
