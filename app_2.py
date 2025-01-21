@@ -596,12 +596,12 @@ def main_app():
         selected_recommendations = st.multiselect("Select Recommendations", recommendations_list)
 
         st.write("### Select Analysis Type")
-        lowcost_epc = st.checkbox("Lowcost EPC")
-        fabric_cost_epc = st.checkbox("Fabric cost EPC")
+        lowcost_epc = st.checkbox("Lowcost EPC C")
+        fabric_cost_epc = st.checkbox("Fabric First EPC C")
         full_recommendations = st.checkbox("Full Recommendations")
         include_renewable_energy = st.checkbox("Renewable Energy")
         cost_savings = st.checkbox("Cost Savings")
-        client_target_epc = st.checkbox("Client Target EPC")
+        client_target_epc = st.checkbox("Client Target SAP Score")
 
         target_score = 70  # Default target score
 
