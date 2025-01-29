@@ -611,7 +611,7 @@ def get_energy_rating(score):
         return "G"
 
 def custom_slider(label="Set Target Score", default_value=70, min_value=0, max_value=100, step=1):
-    """Creates a slider with an energy rating display."""
+    """Creates a slider with proper alignment and spacing."""
     
     # Streamlit slider to select a value
     slider_value = st.slider(label, min_value, max_value, default_value, step)
@@ -619,19 +619,36 @@ def custom_slider(label="Set Target Score", default_value=70, min_value=0, max_v
     # Get the corresponding energy rating
     rating = get_energy_rating(slider_value)
 
-    # Display the score and energy rating inline using HTML+CSS
+    # Add custom CSS for styling
+    st.markdown(
+    """
+    <style>
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+        }
+        .slider {
+            width: 300px;
+            margin-right: 10px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+    )
+
     st.markdown(
         f"""
-        <div style="display: flex; align-items: center; gap: 10px; font-size: 18px;">
-            <span style="color: red; font-weight: bold;">{slider_value}</span> 
-            <span style="color: blue; font-weight: bold;">({rating})</span>
+        <div class="slider-container">
+            <span style="color: red;">{slider_value}</span>
+            <span style="color: red;">{rating}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     return slider_value  # Return the selected score
-
 
 
 def main_app():
@@ -700,6 +717,9 @@ def main_app():
         
          # Extend column_list with additional columns
         column_list.extend([col for col in additional_columns if col not in column_list])
+
+        # Add vertical spacing above the button
+        st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
         if st.button("Generate Recommendations"):
             with st.spinner("Processing data..."):
