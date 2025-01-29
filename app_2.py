@@ -593,6 +593,45 @@ def login():
             st.error("Invalid email or password.")
 
 
+def get_energy_rating(score):
+    """Maps the energy efficiency score to an energy rating (A-G)."""
+    if score >= 92:
+        return "A"
+    elif score >= 81:
+        return "B"
+    elif score >= 69:
+        return "C"
+    elif score >= 55:
+        return "D"
+    elif score >= 39:
+        return "E"
+    elif score >= 21:
+        return "F"
+    else:
+        return "G"
+
+def custom_slider(label="Set Target Score", default_value=70, min_value=0, max_value=100, step=1):
+    """Creates a slider with an energy rating display."""
+    
+    # Streamlit slider to select a value
+    slider_value = st.slider(label, min_value, max_value, default_value, step)
+
+    # Get the corresponding energy rating
+    rating = get_energy_rating(slider_value)
+
+    # Display the score and energy rating inline using HTML+CSS
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 18px;">
+            <span style="color: red; font-weight: bold;">{slider_value}</span> 
+            <span style="color: blue; font-weight: bold;">({rating})</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    return slider_value  # Return the selected score
+
 
 
 def main_app():
@@ -629,12 +668,12 @@ def main_app():
         selected_recommendations = st.multiselect("Select Recommendations", recommendations_list)
 
         st.write("### Select Analysis Type")
-        lowcost_epc = st.checkbox("Lowcost EPC")
-        fabric_cost_epc = st.checkbox("Fabric cost EPC")
-        full_recommendations = st.checkbox("Full Recommendations")
+        lowcost_epc = st.checkbox("Lowcost EPC C")
+        fabric_cost_epc = st.checkbox("Fabric First EPC C")
+        full_recommendations = st.checkbox("All Possible Recommendations")
         include_renewable_energy = st.checkbox("Renewable Energy")
         cost_savings = st.checkbox("Cost Savings")
-        client_target_epc = st.checkbox("Client Target EPC")
+        client_target_epc = st.checkbox("Client Target SAP Score")
 
         target_score = 70  # Default target score
 
@@ -653,7 +692,7 @@ def main_app():
             additional_columns.append("Renewable_energy")
 
         if client_target_epc:
-            target_score = st.slider("Set Target Score", min_value=0, max_value=100, value=70, step=1)
+            target_score = custom_slider("Set Target Score", default_value=70, min_value=0, max_value=100, step=1)
             additional_columns.extend(["CLIENTS_RECOMMENDATION", "CLIENT_TARGET_SCORE"])
 
         if cost_savings:
