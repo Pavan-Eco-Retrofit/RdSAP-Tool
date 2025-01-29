@@ -29,7 +29,9 @@ recommendations_list = [
     "Roof room insulation",
     "Solid wall insulation (internal or external)",
     "External Wall insulation on system build & Timber frame walls",
-    "Solar PV"
+    "Solar PV",
+    "Insulated Doors",
+    "Hotwater cylinder Insulation"
 ]
 
 # Function to append recommendations
@@ -262,7 +264,28 @@ def process_file(file, selected_recommendations, target_score):
             df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
                 lambda rec: append_recommendation(rec, recommendation)
             )
+
+        if recommendation == "Insulated Doors":
+            df['MULTI_GLAZE_PROPORTION'] = pd.to_numeric(df['MULTI_GLAZE_PROPORTION'], errors='coerce').fillna(0).astype('int64')
+            condition = (df['GLAZED_TYPE'].str.lower() == 'single glazing')
+            df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
+                lambda rec: append_recommendation(rec, recommendation)
+            )
             
+        if recommendation == "Hotwater cylinder Insulation":
+            df['HOTWATER_DESCRIPTION'] = df['HOTWATER_DESCRIPTION'].fillna('').str.lower()
+            df['HOT_WATER_ENERGY_EFF'] = df['HOT_WATER_ENERGY_EFF'].fillna('').str.lower()
+
+            # Define the condition using a regex pattern with OR operator (|)
+            condition = (
+                df['HOTWATER_DESCRIPTION'].str.contains(r'from main system, no cylinder thermostat', regex=True) &
+                df['HOT_WATER_ENERGY_EFF'].str.contains(r'average|poor|very poor', regex=True)
+            )
+
+            df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
+                lambda rec: append_recommendation(rec, recommendation)
+            )
+
 
     # Clean up trailing commas in RECOMMENDATION column
     df['RECOMMENDATION'] = df['RECOMMENDATION'].str.rstrip(', ')
@@ -271,16 +294,18 @@ def process_file(file, selected_recommendations, target_score):
     measure_scores = {
         "Loft insulation at ceiling level": 2,
         "Low energy lights": 1,
-        "Draught proofing of windows and doors": 3,
+        "Draught proofing of windows and doors": 1,
         "Heating controls for wet central heating": 4,
         "Cavity wall insulation on its own": 6,
-        "Double glazed windows": 4,
+        "Double glazed windows": 2,
         "Flat roof insulation": 3,
-        "Roof room insulation": 6,
+        "Roof room insulation": 5,
         "Solid wall insulation (internal or external)": 5,
         "External Wall insulation on system build & Timber frame walls": 5,
         "Air or ground source heat pump": 2,
-        "Solar PV": 10
+        "Solar PV": 10,
+        "Insulated Doors": 1,
+        "Hotwater cylinder Insulation": 2
     }
 
     priority_table = {
@@ -289,6 +314,8 @@ def process_file(file, selected_recommendations, target_score):
         "Low energy lights": 1,
         "Draught proofing of windows and doors": 1,
         "Heating controls for wet central heating": 1,
+        "Insulated Doors": 1,
+        "Hotwater cylinder Insulation": 1,
         "Cavity wall insulation on its own": 2,
         "Double glazed windows": 3,
         "Flat roof insulation": 4,
@@ -304,6 +331,8 @@ def process_file(file, selected_recommendations, target_score):
         "Loft insulation at ceiling level": 1,
         "Low energy lights": 2,
         "Draught proofing of windows and doors": 1,
+        "Insulated Doors": 1,
+        "Hotwater cylinder Insulation": 1,
         "Heating controls for wet central heating": 3,
         "Cavity wall insulation on its own": 1,
         "Double glazed windows": 1,
@@ -327,7 +356,9 @@ def process_file(file, selected_recommendations, target_score):
         "Solid wall insulation (external)": 1,
         "Solid wall insulation (internal)": 1,
         "External Wall insulation on system build & Timber frame walls": 1,
-        "Air or ground source heat pump": 1
+        "Air or ground source heat pump": 1,
+        "Insulated Doors": 1,
+        "Hotwater cylinder Insulation": 1
     }
 
     # Add a new column to calculate total score based on recommendations
@@ -343,7 +374,7 @@ def process_file(file, selected_recommendations, target_score):
         prioritized_measures = sorted(recommendations, key=lambda x: priority_table.get(x.strip(), float('inf')))
         for measure in prioritized_measures:
             score = measure_scores.get(measure.strip(), 0)
-            if total_score < 70 and score > 0:
+            if total_score < 69 and score > 0:
                 total_score += score
                 selected_measures.append(measure)
             if total_score >= 70:
@@ -590,18 +621,20 @@ def main_app():
             "Roof room insulation",
             "Solid wall insulation (internal or external)",
             "External Wall insulation on system build & Timber frame walls",
-            "Solar PV"
+            "Solar PV",
+            "Insulated Doors",
+            "Hotwater cylinder Insulation"
         ]
 
         selected_recommendations = st.multiselect("Select Recommendations", recommendations_list)
 
         st.write("### Select Analysis Type")
-        lowcost_epc = st.checkbox("Lowcost EPC C")
-        fabric_cost_epc = st.checkbox("Fabric First EPC C")
+        lowcost_epc = st.checkbox("Lowcost EPC")
+        fabric_cost_epc = st.checkbox("Fabric cost EPC")
         full_recommendations = st.checkbox("Full Recommendations")
         include_renewable_energy = st.checkbox("Renewable Energy")
         cost_savings = st.checkbox("Cost Savings")
-        client_target_epc = st.checkbox("Client Target SAP Score")
+        client_target_epc = st.checkbox("Client Target EPC")
 
         target_score = 70  # Default target score
 
