@@ -258,8 +258,10 @@ def process_file(file, selected_recommendations, target_score):
                     df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
 
         if recommendation == "Solar PV":
+            df['PHOTO_SUPPLY'] = pd.to_numeric(df['PHOTO_SUPPLY'], errors='coerce').fillna(0).astype('int64')
+            df['PHOTO_SUPPLY'] = df['PHOTO_SUPPLY'].replace(0.0, 0)
             condition = (
-                (df['PHOTO_SUPPLY'] == '0') |  (df['PHOTO_SUPPLY'] == 0)
+                (df['PHOTO_SUPPLY'] == 0.0) |  (df['PHOTO_SUPPLY'] == 0)
             )
             df.loc[condition, 'RECOMMENDATION'] = df.loc[condition, 'RECOMMENDATION'].apply(
                 lambda rec: append_recommendation(rec, recommendation)
@@ -365,7 +367,7 @@ def process_file(file, selected_recommendations, target_score):
     def calculate_recommendation(row, measure_scores, priority_table):
         current_efficiency = row['CURRENT_ENERGY_EFFICIENCY']
         if current_efficiency >= 70:
-            return "Already 70"
+            return "SAP score already meets 70"
 
         total_score = current_efficiency
         selected_measures = []
@@ -374,20 +376,20 @@ def process_file(file, selected_recommendations, target_score):
         prioritized_measures = sorted(recommendations, key=lambda x: priority_table.get(x.strip(), float('inf')))
         for measure in prioritized_measures:
             score = measure_scores.get(measure.strip(), 0)
-            if total_score < 69 and score > 0:
+            if total_score < 70 and score > 0:
                 total_score += score
                 selected_measures.append(measure)
             if total_score >= 70:
                 break
 
-        return ', '.join(selected_measures) if total_score >= 70 else "Not enough measures"
+        return ', '.join(selected_measures) if total_score >= 70 else "Property cannot reach 70"
 
 
     # Function to calculate CLIENTS_RECOMMENDATION
     def calculate_client_recommendation(row, measure_scores, client_priority, target_score):
         current_efficiency = row['CURRENT_ENERGY_EFFICIENCY']
         if current_efficiency >= target_score:
-            return "Already at target"
+            return "Client Target SAP Score Achieved"
 
         total_score = current_efficiency
         selected_measures = []
@@ -403,7 +405,7 @@ def process_file(file, selected_recommendations, target_score):
             if total_score >= target_score:
                 break
 
-        return ', '.join(selected_measures) if total_score >= target_score else "Not enough measures"
+        return ', '.join(selected_measures) if total_score >= target_score else "Property cannot reach client target SAP score"
 
     # Target score provided by the client (replace this with the actual target)
     target_score = target_score
@@ -421,17 +423,17 @@ def process_file(file, selected_recommendations, target_score):
     df['FINISHING_SAP_SCORE'] = pd.to_numeric(df['FINISHING_SAP_SCORE'], errors='coerce').fillna(0)
     df['FINISHING_SAP_SCORE'] += df['CURRENT_ENERGY_EFFICIENCY']
 
-    df['LOWCOST_RECOMMENDATION'] = df.apply(lambda row: calculate_recommendation(row, measure_scores, priority_table), axis=1)
-    df['TOTAL_LOWCOST_RECOMMENDATION'] = df['LOWCOST_RECOMMENDATION'].apply(
+    df['LOWCOST_EPC_C_RECOMMENDATION'] = df.apply(lambda row: calculate_recommendation(row, measure_scores, priority_table), axis=1)
+    df['TOTAL_LOWCOST_EPC_C_RECOMMENDATION'] = df['LOWCOST_EPC_C_RECOMMENDATION'].apply(
         lambda rec: sum(measure_scores.get(r.strip(), 0) for r in rec.split(', ') if r.strip())
     )
-    df['TOTAL_LOWCOST_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
+    df['TOTAL_LOWCOST_EPC_C_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
 
-    df['FABRIC_RECOMMENDATION'] = df.apply(lambda row: calculate_recommendation(row, measure_scores, fabric_priority_table), axis=1)
-    df['TOTAL_FABRIC_RECOMMENDATION'] = df['FABRIC_RECOMMENDATION'].apply(
+    df['FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df.apply(lambda row: calculate_recommendation(row, measure_scores, fabric_priority_table), axis=1)
+    df['TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df['FABRIC_FIRST_EPC_C_RECOMMENDATION'].apply(
         lambda rec: sum(measure_scores.get(r.strip(), 0) for r in rec.split(', ') if r.strip())
     )
-    df['TOTAL_FABRIC_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
+    df['TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
 
     df['CLIENTS_RECOMMENDATION'] = df.apply(
         lambda row: calculate_client_recommendation(row, measure_scores, client_priority, target_score), axis=1
@@ -442,16 +444,16 @@ def process_file(file, selected_recommendations, target_score):
     df['CLIENT_TARGET_SCORE'] += df['CURRENT_ENERGY_EFFICIENCY']
 
     df['CLIENT_TARGET_SCORE'] = df.apply(
-        lambda x: 'Not enough measures' if x['CLIENTS_RECOMMENDATION'] == 'Not enough measures' else (
+        lambda x: 'Property cannot reach client target SAP score' if x['CLIENTS_RECOMMENDATION'] == 'Property cannot reach client target SAP score' else (
             'same sap score' if x['CLIENTS_RECOMMENDATION'] == '' else x['CLIENT_TARGET_SCORE']
         ), axis=1
     )
 
-    cols_to_replace = ['TOTAL_LOWCOST_RECOMMENDATION', 'TOTAL_FABRIC_RECOMMENDATION', 'CLIENT_TARGET_SCORE']
+    cols_to_replace = ['TOTAL_LOWCOST_EPC_C_RECOMMENDATION', 'TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION', 'CLIENT_TARGET_SCORE']
 
     for col in cols_to_replace:
         df[col] = df.apply(
-            lambda x: 'same sap score' if x[col] == x['CURRENT_ENERGY_EFFICIENCY'] else x[col], axis=1
+            lambda x: 'SAP Score Unchanged' if x[col] == x['CURRENT_ENERGY_EFFICIENCY'] else x[col], axis=1
         )
 
     df1 = pd.read_excel(r"data/ECO4 Full Project Scores Matrix.xlsx")
@@ -536,7 +538,7 @@ def process_file(file, selected_recommendations, target_score):
         if not filtered_df1.empty:
             return filtered_df1["Cost Savings"].iloc[0]
         else:
-            return "Not Found"
+            return "No Change"
 
     # Apply get_cost_savings
     df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
@@ -697,10 +699,10 @@ def main_app():
         additional_columns = []
 
         if lowcost_epc:
-            additional_columns.extend(["LOWCOST_RECOMMENDATION", "TOTAL_LOWCOST_RECOMMENDATION"])
+            additional_columns.extend(["LOWCOST_EPC_C_RECOMMENDATION", "TOTAL_LOWCOST_EPC_C_RECOMMENDATION"])
 
         if fabric_cost_epc:
-            additional_columns.extend(["FABRIC_RECOMMENDATION", "TOTAL_FABRIC_RECOMMENDATION"])
+            additional_columns.extend(["FABRIC_FIRST_EPC_C_RECOMMENDATION", "TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION"])
 
         if full_recommendations:
             additional_columns.extend(["RECOMMENDATION", "FINISHING_SAP_SCORE"])
