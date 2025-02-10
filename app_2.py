@@ -5,9 +5,9 @@ import re
 
 # Age band dictionary
 age_band_dict = {
-    "A": "before 1900", "B": "1900-1929", "C": "1930-1949", "D": "1950-1966",
-    "E": "1967-1975", "F": "1976-1982", "G": "1983-1990", "H": "1991-1995",
-    "I": "1996-2002", "J": "2003-2006", "K": "2007-2011", "L": "2012-2022", "M": "2023 onwards"
+    "A": "England and Wales: before 1900", "B": "England and Wales: 1900-1929", "C": "England and Wales: 1930-1949", "D": "England and Wales: 1950-1966",
+    "E": "England and Wales: 1967-1975", "F": "England and Wales: 1976-1982", "G": "England and Wales: 1983-1990", "H": "England and Wales: 1991-1995",
+    "I": "England and Wales: 1996-2002", "J": "England and Wales: 2003-2006", "K": "England and Wales: 2007-2011", "L": "England and Wales: 2012-2022", "M": "England and Wales: 2023 onwards"
 }
 
 # Wall U-values dictionary
@@ -538,7 +538,7 @@ def process_file(file, selected_recommendations, target_score):
         if not filtered_df1.empty:
             return filtered_df1["Cost Savings"].iloc[0]
         else:
-            return "No Change"
+            return "Nill"
 
     # Apply get_cost_savings
     df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
@@ -549,8 +549,8 @@ def process_file(file, selected_recommendations, target_score):
 
 
 # Predefined credentials
-VALID_EMAIL = "banavasipavan2002@gmail.com"
-VALID_PASSWORD = "Pavan$2002"
+VALID_EMAIL = "designspecifics@dev"
+VALID_PASSWORD = "DSL@2025"
 
 def login():
     st.markdown("""
