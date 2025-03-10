@@ -548,6 +548,11 @@ def process_file(file, selected_recommendations, target_score):
 
     # Apply get_cost_savings
     df["COST_SAVINGS"] = df.apply(get_cost_savings, axis=1)
+
+    # Replace 'Nill' with NaN (empty value) and ensure column is numeric
+    df["COST_SAVINGS"] = df["COST_SAVINGS"].replace("Nill", pd.NA)
+    df["COST_SAVINGS"] = pd.to_numeric(df["COST_SAVINGS"], errors='coerce').fillna(0)
+
     #df["COST_SAVINGS_RECOM"] = df.apply(lambda row: f"{assign_sap_band(row['CURRENT_ENERGY_EFFICIENCY'])} -> {assign_sap_band(row['FINISHING_SAP_SCORE'])}", axis=1)
                         
     return df
