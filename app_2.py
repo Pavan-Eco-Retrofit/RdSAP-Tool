@@ -159,18 +159,24 @@ def process_file(file, selected_recommendations, target_score):
             df['MAIN_HEATING_CONTROLS'] = df['MAIN_HEATING_CONTROLS'].replace(r'\xa0', '', regex=True).str.strip()
             df['MAIN_HEATING_CONTROLS'] = pd.to_numeric(df['MAIN_HEATING_CONTROLS'], errors='coerce').fillna(0).astype('int32')
             df['MAINHEAT_DESCRIPTION'] = df['MAINHEAT_DESCRIPTION'].fillna('').astype(str).str.lower().str.strip()
+            df['MAINHEAT_ENERGY_EFF'] = df['MAINHEAT_ENERGY_EFF'].fillna('').astype(str).str.lower().str.strip()
+            
             heating_control_codes = ["2101", "2102", "2103", "2104", "2105", "2106"]
 
             for index, row in df.iterrows():
                 main_heating_controls = str(row['MAIN_HEATING_CONTROLS'])
                 mainheat_description = row['MAINHEAT_DESCRIPTION']
+                energy_efficiency = row['MAINHEAT_ENERGY_EFF']
 
-                if main_heating_controls in heating_control_codes and "boiler and radiators" in mainheat_description:
-                    df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
-                elif "boiler" in mainheat_description and "underfloor heating" in mainheat_description:
-                    df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
-                elif "heat pump, radiators" in mainheat_description or "underfloor" in mainheat_description:
-                    df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
+                # Check if heating control code, description, and energy efficiency all match
+                if (main_heating_controls in heating_control_codes and "boiler and radiators" in mainheat_description) or \
+                ("boiler" in mainheat_description and "underfloor heating" in mainheat_description) or \
+                ("heat pump, radiators" in mainheat_description or "underfloor" in mainheat_description):
+
+                    # Check if the energy efficiency is "very poor"
+                    if "very poor" in energy_efficiency:
+                        df.at[index, 'RECOMMENDATION'] = append_recommendation(df.at[index, 'RECOMMENDATION'], recommendation)
+
 
         if recommendation == "Loft insulation at ceiling level":
             for index, row in df.iterrows():
@@ -329,20 +335,14 @@ def process_file(file, selected_recommendations, target_score):
     }
 
     fabric_priority_table = {
-        "Solar PV" : 1,
         "Loft insulation at ceiling level": 1,
-        "Low energy lights": 2,
         "Draught proofing of windows and doors": 1,
         "Insulated Doors": 1,
-        "Hotwater cylinder Insulation": 1,
-        "Heating controls for wet central heating": 3,
         "Cavity wall insulation on its own": 1,
         "Double glazed windows": 1,
         "Flat roof insulation": 1,
         "Roof room insulation": 1,
         "Solid wall insulation (internal or external)": 1,
-        "External Wall insulation on system build & Timber frame walls": 1,
-        "Air or ground source heat pump": 3
     }
 
     client_priority = {
@@ -355,8 +355,7 @@ def process_file(file, selected_recommendations, target_score):
         "Double glazed windows": 1,
         "Flat roof insulation": 1,
         "Roof room insulation": 1,
-        "Solid wall insulation (external)": 1,
-        "Solid wall insulation (internal)": 1,
+        "Solid wall insulation (internal or external)": 1,
         "External Wall insulation on system build & Timber frame walls": 1,
         "Air or ground source heat pump": 1,
         "Insulated Doors": 1,
@@ -406,6 +405,51 @@ def process_file(file, selected_recommendations, target_score):
                 break
 
         return ', '.join(selected_measures) if total_score >= target_score else "Property cannot reach client target SAP score"
+    
+    def apply_fabric_first_recommendation(row, fabric_priority_table, measure_scores, target_score=70):
+        # List of relevant fabric recommendations (Only fabric-related ones)
+        fabric_recommendations = [
+            "Loft insulation at ceiling level",
+            "Draught proofing of windows and doors",
+            "Cavity wall insulation on its own",
+            "Double glazed windows",
+            "Flat roof insulation",
+            "Roof room insulation",
+            "Solid wall insulation (internal or external)",
+            "Insulated Doors"
+        ]
+        
+        # Check if any of the fabric recommendations are present in the RECOMMENDATION column
+        recommendations_in_row = [rec.strip() for rec in row['RECOMMENDATION'].split(', ')]
+        
+        # Filter the recommendations to only include fabric recommendations
+        fabric_recommendations_in_row = [rec for rec in recommendations_in_row if rec in fabric_recommendations]
+        
+        if fabric_recommendations_in_row:
+            # Apply fabric priority logic to calculate the total score
+            current_efficiency = row['CURRENT_ENERGY_EFFICIENCY']
+            total_score = current_efficiency
+            selected_measures = []
+            
+            # Prioritize fabric recommendations based on the fabric priority table
+            prioritized_measures = sorted(fabric_recommendations_in_row, key=lambda x: fabric_priority_table.get(x.strip(), float('inf')))
+            
+            for measure in prioritized_measures:
+                score = measure_scores.get(measure.strip(), 0)
+                if total_score < target_score and score > 0:
+                    total_score += score
+                    selected_measures.append(measure)
+                if total_score >= target_score:
+                    break
+
+            # Return the selected recommendations if the score reaches or exceeds the target
+            if total_score >= target_score:
+                return ', '.join(selected_measures)
+            else:
+                return "Property does not reach 70 with Fabric measures"
+        else:
+            # If no fabric recommendations are found
+            return "Property does not reach 70 with Fabric measures"
 
     # Target score provided by the client (replace this with the actual target)
     target_score = target_score
@@ -429,11 +473,20 @@ def process_file(file, selected_recommendations, target_score):
     )
     df['TOTAL_LOWCOST_EPC_C_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
 
-    df['FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df.apply(lambda row: calculate_recommendation(row, measure_scores, fabric_priority_table), axis=1)
-    df['TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df['FABRIC_FIRST_EPC_C_RECOMMENDATION'].apply(
-        lambda rec: sum(measure_scores.get(r.strip(), 0) for r in rec.split(', ') if r.strip())
+
+    # Apply the function to get the fabric first EPC recommendations
+    df['FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df.apply(
+        lambda row: apply_fabric_first_recommendation(row, fabric_priority_table, measure_scores), axis=1
     )
+
+    # Calculate the total fabric first EPC C recommendation score
+    df['TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION'] = df['FABRIC_FIRST_EPC_C_RECOMMENDATION'].apply(
+        lambda rec: sum(measure_scores.get(r.strip(), 0) for r in rec.split(', ') if r.strip()) if rec != "Property does not reach 70 with Fabric measures" else 0
+    )
+
     df['TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION'] += df['CURRENT_ENERGY_EFFICIENCY']
+
+
 
     df['CLIENTS_RECOMMENDATION'] = df.apply(
         lambda row: calculate_client_recommendation(row, measure_scores, client_priority, target_score), axis=1
