@@ -449,12 +449,18 @@ def process_file(file, selected_recommendations, target_score):
         ), axis=1
     )
 
-    cols_to_replace = ['TOTAL_LOWCOST_EPC_C_RECOMMENDATION', 'TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION', 'CLIENT_TARGET_SCORE']
-
+    cols_to_replace = [
+        'TOTAL_LOWCOST_EPC_C_RECOMMENDATION', 
+        'TOTAL_FABRIC_FIRST_EPC_C_RECOMMENDATION', 
+        'CLIENT_TARGET_SCORE'
+    ]
+    
+    # Replace "SAP Score Unchanged" with NaN and convert to numeric
     for col in cols_to_replace:
-        df[col] = df.apply(
-            lambda x: 'SAP Score Unchanged' if x[col] == x['CURRENT_ENERGY_EFFICIENCY'] else x[col], axis=1
-        )
+        df[col] = df[col].replace("SAP Score Unchanged", pd.NA)  # Ensure consistent missing value handling
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)  # Convert to numeric, replacing errors with 0
+        df[col] = df[col].astype('int64')  # Ensure integer type to prevent Arrow conversion errors
+
 
     df1 = pd.read_excel(r"data/ECO4 Full Project Scores Matrix.xlsx")
     # SAP rating band ranges
